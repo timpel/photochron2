@@ -6,13 +6,18 @@ using System.Linq;
 
 namespace PhotoChronLib
 {
-    public class PhotoRenamingService
+    public class PhotoRenamingService : IPhotoRenamingService
     {
         private List<string> _filePaths;
 
         public PhotoRenamingService()
         {
             _filePaths = new List<string>();
+        }
+
+        public PhotoRenamingService(List<String> paths)
+        {
+            _filePaths = paths;
         }
 
         public void AddFilePath(string path)
@@ -30,12 +35,12 @@ namespace PhotoChronLib
             }
             int nameLength = Convert.ToInt32(Math.Log10(_filePaths.Count));
             sortFilePaths();
-            List<FileInfo> files = _filePaths.Select(path => { new FileInfo(path) });
+            List<FileInfo> files = _filePaths.Select(path => new FileInfo(path)).ToList();
 
             foreach (var file in files)
             {
-                var newName = fileNum.ToString("D4");
-                File.Move(file.Name, newName);
+                var newName = fileNum.ToString($"D{nameLength}") + "_" + file.Name;
+                File.Move(file.FullName, Path.Combine(file.Directory.FullName, newName));
                 fileNum++;
             }
         }

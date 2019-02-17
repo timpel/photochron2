@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PhotoChronConsole": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\tim\\Pictures\\utah combined\""
+    }
+  }
+}
