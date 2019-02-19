@@ -1,21 +1,23 @@
 ﻿import React, { Component } from "react";
 import Dropzone from "./Dropzone";
 import "./Upload.css";
-import Progress from "./Progress";
 
 class Upload extends Component {
+    StatusType = Object.freeze({
+        AWAITING_INPUT: Symbol("awaiting input"),
+        WORKING: Symbol("working"),
+        COMPLETE: Symbol("complete")
+    });
+
     constructor(props) {
         super(props);
         this.state = {
             files: [],
-            uploading: false,
-            uploadProgress: {},
-            successfullUploaded: false
+            status: this.StatusType.AWAITING_INPUT,
         };
 
         this.onFilesAdded = this.onFilesAdded.bind(this);
         this.uploadFiles = this.uploadFiles.bind(this);
-        this.sendRequest = this.sendRequest.bind(this);
         this.renderActions = this.renderActions.bind(this);
     }
 
@@ -26,91 +28,104 @@ class Upload extends Component {
     }
 
     async uploadFiles() {
-        this.sendRequest(this.state.files).then(res => { this.setState({ successfullUploaded: true, uploading: false }) });
-    }
+        const req = new XMLHttpRequest();
 
-    sendRequest(files) {
-        return new Promise((resolve, reject) => {
-            const req = new XMLHttpRequest();
+        this.setState({ status: this.StatusType.WORKING });
 
-            let formData = new FormData();
-            for (var i = 0; i < files.length; i++) {
-                formData.append("file", files[i]);
-            }
-
-            // Display the key/value pairs
-            for (var pair of formData.entries()) {
-                console.log(pair[0] + ', ' + pair[1]);
-            }
-
-            req.open("POST", "https://localhost:44317/api/photochron/Rename");
-            req.send(formData);
-        });
-    }
-
-    renderProgress(file) {
-        const uploadProgress = this.state.uploadProgress[file.name];
-        if (this.state.uploading || this.state.successfullUploaded) {
-            return (
-                <div className="ProgressWrapper">
-                    <Progress progress={uploadProgress ? uploadProgress.percentage : 0} />
-                    <img
-                        className="CheckIcon"
-                        alt="done"
-                        src="baseline-check_circle_outline-24px.svg"
-                        style={{
-                            opacity:
-                                uploadProgress && uploadProgress.state === "done" ? 0.5 : 0
-                        }}
-                    />
-                </div>
-            );
+        let files = this.state.files;
+        let formData = new FormData();
+        for (var i = 0; i < files.length; i++) {
+            formData.append("file", files[i]);
         }
+        req.responseType = "blob";
+        req.open("POST", "https://localhost:44317/api/photochron/Rename");
+
+        var that = this;
+
+        req.onload = function () {
+            var url = window.URL.createObjectURL(this.response);
+            var a = document.createElement("a");
+            document.body.appendChild(a);
+            a.href = url;
+            a.download = this.response.name || "ordered.zip"
+            a.click();
+            that.setState({ status: that.StatusType.COMPLETE });
+        };
+
+        req.send(formData)
     }
 
     renderActions() {
-        if (this.state.successfullUploaded) {
+        if (this.state.status == this.StatusType.COMPLETE) {
             return (
                 <button
                     onClick={() =>
-                        this.setState({ files: [], successfullUploaded: false })
+                        this.setState({ files: [], status: this.StatusType.AWAITING_INPUT })
                     }
                 >
                     Clear
         </button>
             );
-        } else {
+        } else if (this.state.status == this.StatusType.AWAITING_INPUT) {
             return (
                 <button
-                    disabled={this.state.files.length < 0 || this.state.uploading}
+                    disabled={this.state.files.length < 0}
                     onClick={this.uploadFiles}
                 >
-                    Upload
+                    Sort
         </button>
             );
+        } else {
+            // this.state.status == this.StatusType.WOKRING
+            return (
+                <button
+                    disabled={true}
+                >
+                    Working...
+        </button>
+            );
+        }
+    }
+
+    renderFiles() {
+        if (this.state.status == this.StatusType.WORKING) {
+            return (
+                <div><p>Uploading / Renaming...</p></div>
+            );
+        }
+        else {
+            this.state.files.map(file => {
+                return (
+                    <div key={file.name} className="Row">
+                        <span className="Filename">{file.name}</span>
+                    </div>
+                );
+            })
         }
     }
 
     render() {
         return (
             <div className="Upload">
-                <span className="Title">Upload Files</span>
+                <span className="Title">Sort Files By Date</span>
                 <div className="Content">
                     <div>
                         <Dropzone
                             onFilesAdded={this.onFilesAdded}
-                            disabled={this.state.uploading || this.state.successfullUploaded}
+                            disabled={this.state.status == this.StatusType.COMPLETE || this.state.status == this.StatusType.WORKING}
                         />
                     </div>
-                    <div className="Files">
-                        {this.state.files.map(file => {
-                            return (
-                                <div key={file.name} className="Row">
-                                    <span className="Filename">{file.name}</span>
-                                    {this.renderProgress(file)}
-                                </div>
-                            );
-                        })}
+                    <div className="Files"> {
+                        this.state.files.map(file => {
+                            if (this.state.status != this.StatusType.WORKING) {
+                                return (
+                                    <div key={file.name} className="Row">
+                                        <span className="Filename">{file.name}</span>
+                                    </div>
+                                );
+                            }
+                        })
+                    }
                     </div>
                 </div>
                 <div className="Actions">{this.renderActions()}</div>

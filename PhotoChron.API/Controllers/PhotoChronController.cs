@@ -4,6 +4,7 @@ using PhotoChronLib;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -28,14 +29,8 @@ namespace PhotoChron.API.Controllers
         [HttpPost("[action]")]
         public async Task<IActionResult> Rename()
         {
-            var files = new List<IFormFile>();
+            var files = HttpContext.Request.Form.Files;
             var filePaths = new List<String>();
-            foreach (var file in HttpContext.Request.Form.Files)
-            {
-                // save file to disk somewhere
-                // add its full path to a list to paths
-                files.Add(file);                
-            }
 
             long size = files.Sum(f => f.Length);
 
@@ -47,6 +42,7 @@ namespace PhotoChron.API.Controllers
             {
                 if (formFile.Length > 0)
                 {
+                    // copy file to temp destination
                     var fullFileDestination = Path.Combine(destinationPath, formFile.FileName);
                     using (var stream = new FileStream(fullFileDestination, FileMode.Create))
                     {
@@ -56,23 +52,39 @@ namespace PhotoChron.API.Controllers
                 }
             }
 
+            //sort/rename photos
             IPhotoRenamingService renamer = new PhotoRenamingService(filePaths);
             renamer.RenameImagesByDateTaken();
 
-            foreach (var file in Directory.EnumerateFiles(destinationPath))
-            {
-                
-            }
+            var zipPath = destinationPath + "-zip.zip";
 
-            // process uploaded files
-            // Don't rely on or trust the FileName property without validation.
-
-            return Ok(new { count = files.Count, size, destinationPath });
-            // make a renamer service
-            // add all the files to it
-            // rename
             // zip up output folder
-            // serve up the zip somehow
+            ZipFile.CreateFromDirectory(
+                destinationPath,
+                zipPath,
+                CompressionLevel.Optimal,
+                true);
+
+            // delete original
+            Directory.Delete(destinationPath, true);
+
+            // return the zip
+            return DownloadFile(zipPath);
+        }
+
+        private IActionResult DownloadFile(string path)
+        {
+            var net = new System.Net.WebClient();
+            var data = net.DownloadData(path);
+            var content = new System.IO.MemoryStream(data);
+            var contentType = "APPLICATION/octet-stream";
+            var fileName = "ordered.zip";
+
+            // Delete zip from server
+            System.IO.File.Delete(path);
+
+            // return zip stream
+            return File(content, contentType, fileName);
         }
     }
 }
